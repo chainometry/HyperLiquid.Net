@@ -59,6 +59,12 @@ namespace HyperLiquid.Net.Enums
         /// ["<c>Auto-Deleveraging</c>"] Auto deleveraging
         /// </summary>
         [Map("Auto-Deleveraging")]
-        AutoDeleveraging
+        AutoDeleveraging,
+        /// <summary>
+        /// ["<c>Settlement</c>"] Delist settlement - the position was settled to the oracle price ahead of a
+        /// validator delisting vote
+        /// </summary>
+        [Map("Settlement")]
+        Settlement
     }
 }
