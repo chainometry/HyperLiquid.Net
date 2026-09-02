@@ -14,6 +14,8 @@ namespace HyperLiquid.Net.Clients.SpotApi
     internal partial class HyperLiquidRestClientSpotApi : HyperLiquidRestClientApi, IHyperLiquidRestClientSpotApi
     {
         #region fields 
+        private readonly HyperLiquidRestClientSpotSharedApi _sharedApi;
+
         internal new HyperLiquidRestOptions ClientOptions => (HyperLiquidRestOptions)base.ClientOptions;
         #endregion
 
@@ -33,6 +35,8 @@ namespace HyperLiquid.Net.Clients.SpotApi
             Account = new HyperLiquidRestClientSpotApiAccount(this);
             ExchangeData = new HyperLiquidRestClientSpotApiExchangeData(_logger, this);
             Trading = new HyperLiquidRestClientSpotApiTrading(_logger, this);
+
+            _sharedApi = new HyperLiquidRestClientSpotSharedApi(this);
         }
         #endregion
 
@@ -40,7 +44,9 @@ namespace HyperLiquid.Net.Clients.SpotApi
         protected override Task<HttpResult<DateTime>> GetServerTimestampAsync() => throw new NotImplementedException();
 
         /// <inheritdoc />
-        public IHyperLiquidRestClientSpotApiShared SharedClient => this;
+        public IHyperLiquidRestClientSpotApiShared SharedClient => _sharedApi;
+        /// <inheritdoc />
+        public IHyperLiquidRestClientSpotSharedApi SharedApi => _sharedApi;
 
     }
 }

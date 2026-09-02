@@ -14,6 +14,8 @@ namespace HyperLiquid.Net.Clients.FuturesApi
     internal partial class HyperLiquidRestClientFuturesApi : HyperLiquidRestClientApi, IHyperLiquidRestClientFuturesApi
     {
         #region fields 
+        private readonly HyperLiquidRestClientFuturesSharedApi _sharedApi;
+
         internal new HyperLiquidRestOptions ClientOptions => (HyperLiquidRestOptions)base.ClientOptions;
         #endregion
 
@@ -37,6 +39,8 @@ namespace HyperLiquid.Net.Clients.FuturesApi
             Account = new HyperLiquidRestClientFuturesApiAccount(this);
             ExchangeData = new HyperLiquidRestClientFuturesApiExchangeData(_logger, this);
             Trading = new HyperLiquidRestClientFuturesApiTrading(_logger, this);
+        
+            _sharedApi = new HyperLiquidRestClientFuturesSharedApi(this);
         }
         #endregion
 
@@ -44,7 +48,9 @@ namespace HyperLiquid.Net.Clients.FuturesApi
         protected override Task<HttpResult<DateTime>> GetServerTimestampAsync() => throw new NotImplementedException();
 
         /// <inheritdoc />
-        public IHyperLiquidRestClientFuturesApiShared SharedClient => this;
+        public IHyperLiquidRestClientFuturesApiShared SharedClient => _sharedApi;
+        /// <inheritdoc />
+        public IHyperLiquidRestClientFuturesSharedApi SharedApi => _sharedApi;
 
     }
 }

@@ -11,30 +11,57 @@ using System.Threading.Tasks;
 
 namespace HyperLiquid.Net.Clients.SpotApi
 {
-    internal partial class HyperLiquidSocketClientSpotApi : IHyperLiquidSocketClientSpotApiShared
+    internal class HyperLiquidSocketClientSpotSharedApi :
+        SharedApiBase,
+        IHyperLiquidSocketClientSpotApiShared,
+        IHyperLiquidSocketClientSpotSharedApi
     {
+        private readonly HyperLiquidSocketClientSpotApi _api;
+
         private const string _exchangeName = "HyperLiquid";
         private const string _topicId = "HyperLiquidSpot";
 
-        public TradingMode[] SupportedTradingModes => new[] { TradingMode.Spot };
+        public override SharedClientInfo Discover() => SharedUtils.GetClientInfo(HyperLiquidExchange.Metadata, this);
 
-        public void SetDefaultExchangeParameter(string key, object value) => ExchangeParameters.SetStaticParameter(Exchange, key, value);
-        public void ResetDefaultExchangeParameters() => ExchangeParameters.ResetStaticParameters();
-        public SharedClientInfo Discover() => SharedUtils.GetClientInfo(HyperLiquidExchange.Metadata, this);
+        public HyperLiquidSocketClientSpotSharedApi(HyperLiquidSocketClientSpotApi api)
+            : base(
+                  api.Exchange,
+                  [TradingMode.Spot],
+                  () => api.Authenticated,
+                  api.FormatSymbol)
+        {
+            _api = api;
+
+            SetCapabilities(
+                SubscribeTickerOptions,
+                SubscribeTradeOptions,
+                SubscribeKlineOptions,
+                SubscribeOrderBookOptions,
+                SubscribeSpotOrderOptions,
+                SubscribeUserTradeOptions,
+                SubscribeBalanceOptions,
+                SubscribeBookTickerOptions,
+                PlaceSpotOrderOptions,
+                CancelSpotOrderOptions
+                );
+        }
 
         #region Ticker client
-        SubscribeTickerOptions ITickerSocketClient.SubscribeTickerOptions { get; } = new SubscribeTickerOptions(_exchangeName);
-        async Task<WebSocketResult<UpdateSubscription>> ITickerSocketClient.SubscribeToTickerUpdatesAsync(SubscribeTickerRequest request, Action<DataEvent<SharedSpotTicker>> handler, CancellationToken ct)
+        async Task<WebSocketResult<UpdateSubscription>> ISubscribeTickerSocket.SubscribeToTickerUpdatesAsync(SubscribeTickerRequest request, Action<DataEvent<SharedTicker>> handler, CancellationToken ct)
+            => await SubscribeToTickerUpdatesAsync(request, x => handler(x.ToType<SharedTicker>(x.Data)), ct).ConfigureAwait(false);
+
+        public SubscribeTickerOptions SubscribeTickerOptions { get; } = new SubscribeTickerOptions(_exchangeName);
+        public async Task<WebSocketResult<UpdateSubscription>> SubscribeToTickerUpdatesAsync(SubscribeTickerRequest request, Action<DataEvent<SharedSpotTicker>> handler, CancellationToken ct)
         {
-            var validationError = SharedClient.SubscribeTickerOptions.ValidateRequest(request, this);
+            var validationError = SubscribeTickerOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return WebSocketResult.Fail<UpdateSubscription>(_exchangeName, validationError);
 
             var symbol = request.Symbol!.GetSymbol(FormatSymbol);
-            var result = await ExchangeData.SubscribeToSymbolUpdatesAsync(symbol, update => 
+            var result = await _api.ExchangeData.SubscribeToSymbolUpdatesAsync(symbol, update => 
             handler(update.ToType(
                 new SharedSpotTicker(
-                    ExchangeSymbolCache.ParseSymbol(_topicId, EnvironmentName, null, update.Data.Symbol),
+                    ExchangeSymbolCache.ParseSymbol(_topicId, _api.EnvironmentName, null, update.Data.Symbol),
                     update.Data.Symbol!,
                     update.Data.MidPrice,
                     null, 
@@ -50,15 +77,15 @@ namespace HyperLiquid.Net.Clients.SpotApi
 
         #region Trade client
 
-        SubscribeTradeOptions ITradeSocketClient.SubscribeTradeOptions { get; } = new SubscribeTradeOptions(_exchangeName, false);
-        async Task<WebSocketResult<UpdateSubscription>> ITradeSocketClient.SubscribeToTradeUpdatesAsync(SubscribeTradeRequest request, Action<DataEvent<SharedTrade[]>> handler, CancellationToken ct)
+        public SubscribeTradeOptions SubscribeTradeOptions { get; } = new SubscribeTradeOptions(_exchangeName, false);
+        public async Task<WebSocketResult<UpdateSubscription>> SubscribeToTradeUpdatesAsync(SubscribeTradeRequest request, Action<DataEvent<SharedTrade[]>> handler, CancellationToken ct)
         {
-            var validationError = SharedClient.SubscribeTradeOptions.ValidateRequest(request, this);
+            var validationError = SubscribeTradeOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return WebSocketResult.Fail<UpdateSubscription>(_exchangeName, validationError);
 
             var symbol = request.Symbol!.GetSymbol(FormatSymbol);
-            var result = await ExchangeData.SubscribeToTradeUpdatesAsync(symbol, update =>
+            var result = await _api.ExchangeData.SubscribeToTradeUpdatesAsync(symbol, update =>
             {
                 if (update.UpdateType == SocketUpdateType.Snapshot)
                     return;
@@ -77,7 +104,7 @@ namespace HyperLiquid.Net.Clients.SpotApi
         #endregion
 
         #region Kline client
-        SubscribeKlineOptions IKlineSocketClient.SubscribeKlineOptions { get; } = new SubscribeKlineOptions(_exchangeName, false,
+        public SubscribeKlineOptions SubscribeKlineOptions { get; } = new SubscribeKlineOptions(_exchangeName, false,
             SharedKlineInterval.OneMinute,
             SharedKlineInterval.ThreeMinutes,
             SharedKlineInterval.FiveMinutes,
@@ -91,15 +118,15 @@ namespace HyperLiquid.Net.Clients.SpotApi
             SharedKlineInterval.OneDay,
             SharedKlineInterval.OneWeek,
             SharedKlineInterval.OneMonth);
-        async Task<WebSocketResult<UpdateSubscription>> IKlineSocketClient.SubscribeToKlineUpdatesAsync(SubscribeKlineRequest request, Action<DataEvent<SharedKline>> handler, CancellationToken ct)
+        public async Task<WebSocketResult<UpdateSubscription>> SubscribeToKlineUpdatesAsync(SubscribeKlineRequest request, Action<DataEvent<SharedKline>> handler, CancellationToken ct)
         {
             var interval = (Enums.KlineInterval)request.Interval;
-            var validationError = SharedClient.SubscribeKlineOptions.ValidateRequest(request, this);
+            var validationError = SubscribeKlineOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return WebSocketResult.Fail<UpdateSubscription>(_exchangeName, validationError);
 
             var symbol = request.Symbol!.GetSymbol(FormatSymbol);
-            var result = await ExchangeData.SubscribeToKlineUpdatesAsync(symbol, interval, 
+            var result = await _api.ExchangeData.SubscribeToKlineUpdatesAsync(symbol, interval, 
                 update =>
                 {
                     if (update.UpdateType == SocketUpdateType.Snapshot)
@@ -122,32 +149,34 @@ namespace HyperLiquid.Net.Clients.SpotApi
         #endregion
 
         #region Order Book client
-        SubscribeOrderBookOptions IOrderBookSocketClient.SubscribeOrderBookOptions { get; } = new SubscribeOrderBookOptions(_exchangeName, false, new[] { 20 });
-        async Task<WebSocketResult<UpdateSubscription>> IOrderBookSocketClient.SubscribeToOrderBookUpdatesAsync(SubscribeOrderBookRequest request, Action<DataEvent<SharedOrderBook>> handler, CancellationToken ct)
+        public SubscribeOrderBookOptions SubscribeOrderBookOptions { get; } = new SubscribeOrderBookOptions(_exchangeName, false, new[] { 20 });
+        public async Task<WebSocketResult<UpdateSubscription>> SubscribeToOrderBookUpdatesAsync(SubscribeOrderBookRequest request, Action<DataEvent<SharedOrderBook>> handler, CancellationToken ct)
         {
-            var validationError = SharedClient.SubscribeOrderBookOptions.ValidateRequest(request, this);
+            var validationError = SubscribeOrderBookOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return WebSocketResult.Fail<UpdateSubscription>(_exchangeName, validationError);
 
             var symbol = request.Symbol!.GetSymbol(FormatSymbol);
-            var result = await ExchangeData.SubscribeToOrderBookUpdatesAsync(symbol, update => handler(
+            var result = await _api.ExchangeData.SubscribeToOrderBookUpdatesAsync(symbol, update => handler(
                 update.ToType(
-                    new SharedOrderBook(SharedQuantityType.BaseAsset, update.Data.Levels.Asks, update.Data.Levels.Bids))), ct: ct).ConfigureAwait(false);
+                    new SharedOrderBook(SharedQuantityType.BaseAsset, update.SequenceNumber, update.Data.Levels.Asks, update.Data.Levels.Bids))), ct: ct).ConfigureAwait(false);
 
             return result;
         }
         #endregion
 
         #region Spot Order client
-
-        SubscribeSpotOrderOptions ISpotOrderSocketClient.SubscribeSpotOrderOptions { get; } = new SubscribeSpotOrderOptions(_exchangeName, true);
         async Task<WebSocketResult<UpdateSubscription>> ISpotOrderSocketClient.SubscribeToSpotOrderUpdatesAsync(SubscribeSpotOrderRequest request, Action<DataEvent<SharedSpotOrder[]>> handler, CancellationToken ct)
+            => await SubscribeToSpotOrderUpdatesAsync(request, x => handler(x.ToType<SharedSpotOrder[]>(x.Data)), ct).ConfigureAwait(false);
+
+        public SubscribeSpotOrderOptions SubscribeSpotOrderOptions { get; } = new SubscribeSpotOrderOptions(_exchangeName, true);
+        public async Task<WebSocketResult<UpdateSubscription>> SubscribeToSpotOrderUpdatesAsync(SubscribeSpotOrderRequest request, Action<DataEvent<SharedSpotOrderUpdate[]>> handler, CancellationToken ct)
         {
-            var validationError = SharedClient.SubscribeSpotOrderOptions.ValidateRequest(request, this);
+            var validationError = SubscribeSpotOrderOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return WebSocketResult.Fail<UpdateSubscription>(_exchangeName, validationError);
 
-            var result = await Trading.SubscribeToOrderUpdatesAsync(null,
+            var result = await _api.Trading.SubscribeToOrderUpdatesAsync(null,
                 update =>
                 {
                     if (update.UpdateType == SocketUpdateType.Snapshot)
@@ -157,9 +186,9 @@ namespace HyperLiquid.Net.Clients.SpotApi
                     if (!spotOrders.Any())
                         return;
 
-                    handler(update.ToType<SharedSpotOrder[]>(spotOrders.Select(x =>
-                        new SharedSpotOrder(
-                            ExchangeSymbolCache.ParseSymbol(_topicId, EnvironmentName, null, x.Order.Symbol!),
+                    handler(update.ToType(spotOrders.Select(x =>
+                        new SharedSpotOrderUpdate(
+                            ExchangeSymbolCache.ParseSymbol(_topicId, _api.EnvironmentName, null, x.Order.Symbol!),
                             x.Order.Symbol!,
                             x.Order.OrderId.ToString(),
                             x.Order.OrderType == Enums.OrderType.Limit || x.Order.OrderType == Enums.OrderType.Limit ? SharedOrderType.Limit : x.Order.OrderType == Enums.OrderType.Market ? SharedOrderType.Market : SharedOrderType.Other,
@@ -221,14 +250,14 @@ namespace HyperLiquid.Net.Clients.SpotApi
 
         #region User Trade client
 
-        SubscribeUserTradeOptions IUserTradeSocketClient.SubscribeUserTradeOptions { get; } = new SubscribeUserTradeOptions(_exchangeName, true);
-        async Task<WebSocketResult<UpdateSubscription>> IUserTradeSocketClient.SubscribeToUserTradeUpdatesAsync(SubscribeUserTradeRequest request, Action<DataEvent<SharedUserTrade[]>> handler, CancellationToken ct)
+        public SubscribeUserTradeOptions SubscribeUserTradeOptions { get; } = new SubscribeUserTradeOptions(_exchangeName, true);
+        public async Task<WebSocketResult<UpdateSubscription>> SubscribeToUserTradeUpdatesAsync(SubscribeUserTradeRequest request, Action<DataEvent<SharedUserTrade[]>> handler, CancellationToken ct)
         {
-            var validationError = SharedClient.SubscribeUserTradeOptions.ValidateRequest(request, this);
+            var validationError = SubscribeUserTradeOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return WebSocketResult.Fail<UpdateSubscription>(_exchangeName, validationError);
 
-            var result = await Trading.SubscribeToUserTradeUpdatesAsync(null,
+            var result = await _api.Trading.SubscribeToUserTradeUpdatesAsync(null,
                 update =>
                 {
                     if (update.UpdateType == SocketUpdateType.Snapshot)
@@ -240,7 +269,7 @@ namespace HyperLiquid.Net.Clients.SpotApi
 
                     handler(update.ToType<SharedUserTrade[]>(spotOrders.Select(x =>
                         new SharedUserTrade(
-                            ExchangeSymbolCache.ParseSymbol(_topicId, EnvironmentName, null, x.Symbol),
+                            ExchangeSymbolCache.ParseSymbol(_topicId, _api.EnvironmentName, null, x.Symbol),
                             x.Symbol!,
                             x.OrderId.ToString(),
                             x.TradeId.ToString(),
@@ -262,14 +291,14 @@ namespace HyperLiquid.Net.Clients.SpotApi
         #endregion
 
         #region Balance client
-        SubscribeBalanceOptions IBalanceSocketClient.SubscribeBalanceOptions { get; } = new SubscribeBalanceOptions(_exchangeName, false);
-        async Task<WebSocketResult<UpdateSubscription>> IBalanceSocketClient.SubscribeToBalanceUpdatesAsync(SubscribeBalancesRequest request, Action<DataEvent<SharedBalance[]>> handler, CancellationToken ct)
+        public SubscribeBalanceOptions SubscribeBalanceOptions { get; } = new SubscribeBalanceOptions(_exchangeName, false);
+        public async Task<WebSocketResult<UpdateSubscription>> SubscribeToBalanceUpdatesAsync(SubscribeBalancesRequest request, Action<DataEvent<SharedBalance[]>> handler, CancellationToken ct)
         {
-            var validationError = SharedClient.SubscribeBalanceOptions.ValidateRequest(request, this);
+            var validationError = SubscribeBalanceOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return WebSocketResult.Fail<UpdateSubscription>(_exchangeName, validationError);
 
-            var result = await Account.SubscribeToUserUpdatesAsync(
+            var result = await _api.Account.SubscribeToUserUpdatesAsync(
                 null,
                 update => handler(update.ToType<SharedBalance[]>(update.Data.SpotBalances.Balances.Select(x => 
                     new SharedBalance(
@@ -286,18 +315,18 @@ namespace HyperLiquid.Net.Clients.SpotApi
 
         #region Book Ticker client
 
-        SubscribeBookTickerOptions IBookTickerSocketClient.SubscribeBookTickerOptions { get; } = new SubscribeBookTickerOptions(_exchangeName, false);
-        async Task<WebSocketResult<UpdateSubscription>> IBookTickerSocketClient.SubscribeToBookTickerUpdatesAsync(SubscribeBookTickerRequest request, Action<DataEvent<SharedBookTicker>> handler, CancellationToken ct)
+        public SubscribeBookTickerOptions SubscribeBookTickerOptions { get; } = new SubscribeBookTickerOptions(_exchangeName, false);
+        public async Task<WebSocketResult<UpdateSubscription>> SubscribeToBookTickerUpdatesAsync(SubscribeBookTickerRequest request, Action<DataEvent<SharedBookTicker>> handler, CancellationToken ct)
         {
-            var validationError = SharedClient.SubscribeBookTickerOptions.ValidateRequest(request, this);
+            var validationError = SubscribeBookTickerOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return WebSocketResult.Fail<UpdateSubscription>(_exchangeName, validationError);
 
             var symbol = request.Symbol!.GetSymbol(FormatSymbol);
-            var result = await ExchangeData.SubscribeToBookTickerUpdatesAsync(symbol, update => 
+            var result = await _api.ExchangeData.SubscribeToBookTickerUpdatesAsync(symbol, update => 
             handler(update.ToType(
                 new SharedBookTicker(
-                    ExchangeSymbolCache.ParseSymbol(_topicId, EnvironmentName, null, update.Data.Symbol),
+                    ExchangeSymbolCache.ParseSymbol(_topicId, _api.EnvironmentName, null, update.Data.Symbol),
                     update.Data.Symbol,
                     update.Data.BestAsk.Price,
                     new SharedOrderQuantity(update.Data.BestAsk.Quantity),
@@ -311,21 +340,21 @@ namespace HyperLiquid.Net.Clients.SpotApi
 
         #region Spot Order Management Client
 
-        SharedFeeDeductionType ISpotOrderManagementSocketClient.SpotFeeDeductionType => SharedFeeDeductionType.DeductFromOutput;
-        SharedFeeAssetType ISpotOrderManagementSocketClient.SpotFeeAssetType => SharedFeeAssetType.OutputAsset;
-        SharedOrderType[] ISpotOrderManagementSocketClient.SpotSupportedOrderTypes { get; } = new[] { SharedOrderType.Limit, SharedOrderType.Market, SharedOrderType.LimitMaker };
-        SharedTimeInForce[] ISpotOrderManagementSocketClient.SpotSupportedTimeInForce { get; } = new[] { SharedTimeInForce.GoodTillCanceled, SharedTimeInForce.ImmediateOrCancel };
-        SharedQuantitySupport ISpotOrderManagementSocketClient.SpotSupportedOrderQuantity { get; } = new SharedQuantitySupport(
+        public SharedFeeDeductionType SpotFeeDeductionType => SharedFeeDeductionType.DeductFromOutput;
+        public SharedFeeAssetType SpotFeeAssetType => SharedFeeAssetType.OutputAsset;
+        public SharedOrderType[] SpotSupportedOrderTypes { get; } = new[] { SharedOrderType.Limit, SharedOrderType.Market, SharedOrderType.LimitMaker };
+        public SharedTimeInForce[] SpotSupportedTimeInForce { get; } = new[] { SharedTimeInForce.GoodTillCanceled, SharedTimeInForce.ImmediateOrCancel };
+        public SharedQuantitySupport SpotSupportedOrderQuantity { get; } = new SharedQuantitySupport(
                 SharedQuantityType.BaseAsset,
                 SharedQuantityType.BaseAsset,
                 SharedQuantityType.BaseAsset,
                 SharedQuantityType.BaseAsset);
 
-        string ISpotOrderManagementSocketClient.GenerateClientOrderId() => ExchangeHelpers.RandomHexString(16)!.ToLowerInvariant();
+        public string GenerateClientOrderId() => ExchangeHelpers.RandomHexString(16)!.ToLowerInvariant();
 
-        PlaceSpotOrderSocketOptions ISpotOrderManagementSocketClient.PlaceSpotOrderOptions { get; } = new PlaceSpotOrderSocketOptions(_exchangeName)
+        public PlaceSpotOrderSocketOptions PlaceSpotOrderOptions { get; } = new PlaceSpotOrderSocketOptions(_exchangeName)
         {
-            RequiredOptionalParameters = new List<ParameterDescription>
+            RequiredRequestParameters = new List<ParameterDescription>
             {
                 new ParameterDescription(nameof(PlaceSpotOrderRequest.Price), typeof(decimal), "Price for the order. For market orders this should be the current symbol price", 21.5m)
             },
@@ -335,13 +364,13 @@ namespace HyperLiquid.Net.Clients.SpotApi
             }
         };
 
-        async Task<QueryResult<SharedId>> ISpotOrderManagementSocketClient.PlaceSpotOrderAsync(PlaceSpotOrderRequest request, CancellationToken ct)
+        public async Task<QueryResult<SharedId>> PlaceSpotOrderAsync(PlaceSpotOrderRequest request, CancellationToken ct)
         {
-            var validationError = SharedClient.PlaceSpotOrderOptions.ValidateRequest(request, this);
+            var validationError = PlaceSpotOrderOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return QueryResult.Fail<SharedId>(Exchange, validationError);
 
-            var result = await Trading.PlaceOrderAsync(
+            var result = await _api.Trading.PlaceOrderAsync(
                 request.Symbol!.GetSymbol(FormatSymbol),
                 request.Side == SharedOrderSide.Buy ? Enums.OrderSide.Buy : Enums.OrderSide.Sell,
                 request.OrderType == SharedOrderType.Limit || request.OrderType == SharedOrderType.LimitMaker ? Enums.OrderType.Limit : Enums.OrderType.Market,
@@ -359,23 +388,23 @@ namespace HyperLiquid.Net.Clients.SpotApi
 
         }
 
-        CancelSpotOrderSocketOptions ISpotOrderManagementSocketClient.CancelSpotOrderOptions { get; } = new CancelSpotOrderSocketOptions(_exchangeName, true)
+        public CancelSpotOrderSocketOptions CancelSpotOrderOptions { get; } = new CancelSpotOrderSocketOptions(_exchangeName, true)
         {
             OptionalExchangeParameters = new List<ParameterDescription>
             {
                 new ParameterDescription("vaultAddress", typeof(string), "Vault address to use for the order", "0x123...")
             }
         };
-        async Task<QueryResult<SharedId>> ISpotOrderManagementSocketClient.CancelSpotOrderAsync(CancelOrderRequest request, CancellationToken ct)
+        public async Task<QueryResult<SharedId>> CancelSpotOrderAsync(CancelOrderRequest request, CancellationToken ct)
         {
-            var validationError = SharedClient.CancelSpotOrderOptions.ValidateRequest(request, this);
+            var validationError = CancelSpotOrderOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return QueryResult.Fail<SharedId>(Exchange, validationError);
 
             if (!long.TryParse(request.OrderId, out var orderId))
                 return QueryResult.Fail<SharedId>(Exchange, ArgumentError.Invalid(nameof(CancelOrderRequest.OrderId), "Invalid order id"));
 
-            var order = await Trading.CancelOrderAsync(
+            var order = await _api.Trading.CancelOrderAsync(
                 request.Symbol!.GetSymbol(FormatSymbol),
                 orderId,
                 vaultAddress: request.GetParamValue<string?>(Exchange, "vaultAddress"),
