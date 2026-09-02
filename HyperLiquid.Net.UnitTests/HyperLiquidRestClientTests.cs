@@ -1,17 +1,16 @@
 using CryptoExchange.Net.Authentication;
 using CryptoExchange.Net.Clients;
-using CryptoExchange.Net.Converters.SystemTextJson;
-using CryptoExchange.Net.Objects;
-using CryptoExchange.Net.Testing;
-using HyperLiquid.Net.Clients;
-using HyperLiquid.Net.Objects;
-using Nethereum.Hex.HexConvertors.Extensions;
-using Nethereum.Signer;
-using Nethereum.Signer.Crypto;
 using NUnit.Framework;
 using System.Collections.Generic;
 using System.Net.Http;
+using HyperLiquid.Net.Clients;
+using CryptoExchange.Net.Objects;
+using CryptoExchange.Net.Converters.SystemTextJson;
+using Nethereum.Signer;
 using System.Net.Sockets;
+using Nethereum.Hex.HexConvertors.Extensions;
+using Nethereum.Signer.Crypto;
+using HyperLiquid.Net.Objects;
 
 namespace HyperLiquid.Net.UnitTests
 {
@@ -94,42 +93,6 @@ namespace HyperLiquid.Net.UnitTests
             // TODO marks intentionally missing interface, need to be able to specify exceptions
             //CryptoExchange.Net.Testing.TestHelpers.CheckForMissingSocketInterfaces<HyperLiquidSocketClient>(
             //    ["IHyperLiquidSocketClientApiAccount", "IHyperLiquidSocketClientApiExchangeData", "IHyperLiquidSocketClientApiTrading"]);
-        }
-
-        [Test]
-        public void TestFuturesRestSharedApiDiscoveryMatchesAggregate()
-        {
-            var (missingOptions, missingInterfaces) = TestHelpers.ValidateSharedApi(new HyperLiquidRestClient().FuturesApi.SharedApi);
-
-            Assert.That(missingOptions, Is.Empty);
-            Assert.That(missingInterfaces, Is.Empty);
-        }
-
-        [Test]
-        public void TestFuturesSocketSharedApiDiscoveryMatchesAggregate()
-        {
-            var (missingOptions, missingInterfaces) = TestHelpers.ValidateSharedApi(new HyperLiquidSocketClient().FuturesApi.SharedApi);
-
-            Assert.That(missingOptions, Is.Empty);
-            Assert.That(missingInterfaces, Is.Empty);
-        }
-
-        [Test]
-        public void TestSpotRestSharedApiDiscoveryMatchesAggregate()
-        {
-            var (missingOptions, missingInterfaces) = TestHelpers.ValidateSharedApi(new HyperLiquidRestClient().SpotApi.SharedApi);
-
-            Assert.That(missingOptions, Is.Empty);
-            Assert.That(missingInterfaces, Is.Empty);
-        }
-
-        [Test]
-        public void TestSpotSocketSharedApiDiscoveryMatchesAggregate()
-        {
-            var (missingOptions, missingInterfaces) = TestHelpers.ValidateSharedApi(new HyperLiquidSocketClient().SpotApi.SharedApi);
-
-            Assert.That(missingOptions, Is.Empty);
-            Assert.That(missingInterfaces, Is.Empty);
         }
     }
 }

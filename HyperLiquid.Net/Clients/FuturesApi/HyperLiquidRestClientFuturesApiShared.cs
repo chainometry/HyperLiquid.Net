@@ -13,59 +13,21 @@ using CryptoExchange.Net.Objects.Errors;
 
 namespace HyperLiquid.Net.Clients.FuturesApi
 {
-    internal class HyperLiquidRestClientFuturesSharedApi :
-        SharedApiBase,
-        IHyperLiquidRestClientFuturesApiShared,
-        IHyperLiquidRestClientFuturesSharedApi
+    internal partial class HyperLiquidRestClientFuturesApi : IHyperLiquidRestClientFuturesApiShared
     {
-        private readonly HyperLiquidRestClientFuturesApi _api;
-
         private const string _exchangeName = "HyperLiquid";
         private const string _topicId = "HyperLiquidFutures";
-        public override SharedClientInfo Discover() => SharedUtils.GetClientInfo(HyperLiquidExchange.Metadata, this);
+        public TradingMode[] SupportedTradingModes => new[] { TradingMode.PerpetualLinear };
+
+        public void SetDefaultExchangeParameter(string key, object value) => ExchangeParameters.SetStaticParameter(Exchange, key, value);
+        public void ResetDefaultExchangeParameters() => ExchangeParameters.ResetStaticParameters();
+        public SharedClientInfo Discover() => SharedUtils.GetClientInfo(HyperLiquidExchange.Metadata, this);
 
         private static readonly HashSet<string> _exchangeKnownFiat = ["EUR", "USD"];
 
-        public HyperLiquidRestClientFuturesSharedApi(HyperLiquidRestClientFuturesApi api)
-           : base(
-                 api.Exchange,
-                 [TradingMode.PerpetualLinear],
-                 () => api.Authenticated,
-                 api.FormatSymbol)
-        {
-            _api = api;
-
-            SetCapabilities(
-                GetBalancesOptions,
-                GetKlinesOptions,
-                GetOrderBookOptions,
-                GetFuturesTickerOptions,
-                GetAllFuturesTickersOptions,
-                GetBookTickerOptions,
-                GetFuturesSymbolsOptions,
-                GetFeeOptions,
-                GetFundingRateHistoryOptions,
-                GetLeverageOptions,
-                SetLeverageOptions,
-                GetOpenInterestOptions,
-                PlaceFuturesOrderOptions,
-                GetFuturesOrderOptions,
-                GetOpenFuturesOrdersOptions,
-                GetClosedFuturesOrdersOptions,
-                GetFuturesOrderTradesOptions,
-                GetFuturesUserTradeHistoryOptions,
-                CancelFuturesOrderOptions,
-                GetPositionsOptions,
-                ClosePositionOptions,
-                GetFuturesOrderByClientOrderIdOptions,
-                CancelFuturesOrderByClientOrderIdOptions,
-                SetFuturesTpSlOptions,
-                CancelFuturesTpSlOptions
-                );
-        }
 
         #region Balance Client
-        public GetBalancesOptions GetBalancesOptions { get; } = new GetBalancesOptions(_exchangeName, AccountTypeFilter.Futures)
+        GetBalancesOptions IBalanceRestClient.GetBalancesOptions { get; } = new GetBalancesOptions(_exchangeName, AccountTypeFilter.Futures)
         {
             OptionalExchangeParameters = new List<ParameterDescription>
             {
@@ -73,24 +35,23 @@ namespace HyperLiquid.Net.Clients.FuturesApi
             }
         };
 
-        public async Task<HttpResult<SharedBalance[]>> GetBalancesAsync(GetBalancesRequest request, CancellationToken ct)
+        async Task<HttpResult<SharedBalance[]>> IBalanceRestClient.GetBalancesAsync(GetBalancesRequest request, CancellationToken ct)
         {
-            var validationError = GetBalancesOptions.ValidateRequest(request, this);
+            var validationError = SharedClient.GetBalancesOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return HttpResult.Fail<SharedBalance[]>(Exchange, validationError);
-            
-            string? dex = request.GetParamValue<string>(Exchange, "dex");
-            var result = await _api.Account.GetAccountInfoAsync(dex: dex, ct: ct).ConfigureAwait(false);
-            if (!result.Success)
-                return HttpResult.Fail<SharedBalance[]>(result);
+                    string? dex = request.GetParamValue<string>(Exchange, "dex");
+                    var result = await Account.GetAccountInfoAsync(dex: dex, ct: ct).ConfigureAwait(false);
+                    if (!result.Success)
+                        return HttpResult.Fail<SharedBalance[]>(result);
 
-            return HttpResult.Ok<SharedBalance[]>(result, [
-                new SharedBalance(
-                    SupportedTradingModes,
-                    "USDC",
-                    result.Data.MarginSummary.AccountValue - result.Data.MarginSummary.TotalMarginUsed,
-                    result.Data.MarginSummary.AccountValue)
-                ]);
+                    return HttpResult.Ok<SharedBalance[]>(result, [
+                        new SharedBalance(
+                            SupportedTradingModes,
+                            "USDC",
+                            result.Data.MarginSummary.AccountValue - result.Data.MarginSummary.TotalMarginUsed,
+                            result.Data.MarginSummary.AccountValue)
+                        ]);
                 
         }
 
@@ -98,7 +59,7 @@ namespace HyperLiquid.Net.Clients.FuturesApi
 
         #region Klines Client
 
-        public GetKlinesOptions GetKlinesOptions { get; } = new GetKlinesOptions(_exchangeName, false, true, true, 1000, false,
+        GetKlinesOptions IKlineRestClient.GetKlinesOptions { get; } = new GetKlinesOptions(_exchangeName, false, true, true, 1000, false,
             SharedKlineInterval.OneMinute,
             SharedKlineInterval.FiveMinutes,
             SharedKlineInterval.FifteenMinutes,
@@ -115,9 +76,9 @@ namespace HyperLiquid.Net.Clients.FuturesApi
             MaxTotalDataPoints = 5000
         };
 
-        public async Task<HttpResult<SharedKline[]>> GetKlinesAsync(GetKlinesRequest request, PageRequest? pageRequest, CancellationToken ct)
+        async Task<HttpResult<SharedKline[]>> IKlineRestClient.GetKlinesAsync(GetKlinesRequest request, PageRequest? pageRequest, CancellationToken ct)
         {
-            var validationError = GetKlinesOptions.ValidateRequest(request, this);
+            var validationError = SharedClient.GetKlinesOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return HttpResult.Fail<SharedKline[]>(Exchange, validationError);
             var interval = (Enums.KlineInterval)request.Interval;
@@ -128,7 +89,7 @@ namespace HyperLiquid.Net.Clients.FuturesApi
             var pageParams = Pagination.GetPaginationParameters(direction, limit, request.StartTime, request.EndTime ?? DateTime.UtcNow, pageRequest);
 
             // Get data
-            var result = await _api.ExchangeData.GetKlinesAsync(
+            var result = await ExchangeData.GetKlinesAsync(
                 symbol,
                 interval,
                 startTime: pageParams.StartTime ?? DateTime.UtcNow.Add(TimeSpan.FromSeconds(-((int)interval * 99))),
@@ -164,20 +125,20 @@ namespace HyperLiquid.Net.Clients.FuturesApi
         #endregion
 
         #region Order Book client
-        public GetOrderBookOptions GetOrderBookOptions { get; } = new GetOrderBookOptions(_exchangeName, [20], false);
-        public async Task<HttpResult<SharedOrderBook>> GetOrderBookAsync(GetOrderBookRequest request, CancellationToken ct)
+        GetOrderBookOptions IOrderBookRestClient.GetOrderBookOptions { get; } = new GetOrderBookOptions(_exchangeName, [20], false);
+        async Task<HttpResult<SharedOrderBook>> IOrderBookRestClient.GetOrderBookAsync(GetOrderBookRequest request, CancellationToken ct)
         {
-            var validationError = GetOrderBookOptions.ValidateRequest(request, this);
+            var validationError = SharedClient.GetOrderBookOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return HttpResult.Fail<SharedOrderBook>(Exchange, validationError);
 
-            var result = await _api.ExchangeData.GetOrderBookAsync(
+            var result = await ExchangeData.GetOrderBookAsync(
                 request.Symbol!.GetSymbol(FormatSymbol),
                 ct: ct).ConfigureAwait(false);
             if (!result.Success)
                 return HttpResult.Fail<SharedOrderBook>(result);
 
-            return HttpResult.Ok(result, new SharedOrderBook(SharedQuantityType.BaseAsset, null, result.Data.Levels.Asks, result.Data.Levels.Bids));
+            return HttpResult.Ok(result, new SharedOrderBook(SharedQuantityType.BaseAsset, result.Data.Levels.Asks, result.Data.Levels.Bids));
                                 
         }
 
@@ -185,15 +146,15 @@ namespace HyperLiquid.Net.Clients.FuturesApi
 
         #region Ticker client
 
-        public GetFuturesTickerOptions GetFuturesTickerOptions { get; } = new GetFuturesTickerOptions(_exchangeName);
-        public async Task<HttpResult<SharedFuturesTicker>> GetFuturesTickerAsync(GetTickerRequest request, CancellationToken ct)
+        GetFuturesTickerOptions IFuturesTickerRestClient.GetFuturesTickerOptions { get; } = new GetFuturesTickerOptions(_exchangeName);
+        async Task<HttpResult<SharedFuturesTicker>> IFuturesTickerRestClient.GetFuturesTickerAsync(GetTickerRequest request, CancellationToken ct)
         {
-            var validationError = GetFuturesTickerOptions.ValidateRequest(request, this);
+            var validationError = SharedClient.GetFuturesTickerOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return HttpResult.Fail<SharedFuturesTicker>(Exchange, validationError);
 
             var symbolName = request.Symbol!.GetSymbol(FormatSymbol);
-            var result = await _api.ExchangeData.GetExchangeInfoAndTickersAsync(ct: ct).ConfigureAwait(false);
+            var result = await ExchangeData.GetExchangeInfoAndTickersAsync(ct: ct).ConfigureAwait(false);
             if (!result.Success)
                 return HttpResult.Fail<SharedFuturesTicker>(result);
 
@@ -202,7 +163,7 @@ namespace HyperLiquid.Net.Clients.FuturesApi
                 return HttpResult.Fail<SharedFuturesTicker>(result, new ServerError(new ErrorInfo(ErrorType.UnknownSymbol, "Symbol not found")));
 
             return HttpResult.Ok(result, new SharedFuturesTicker(
-                ExchangeSymbolCache.ParseSymbol(_topicId, _api.EnvironmentName, null, symbol.Symbol), 
+                ExchangeSymbolCache.ParseSymbol(_topicId, EnvironmentName, null, symbol.Symbol), 
                 symbol.Symbol, 
                 symbol.MidPrice,
                 null, 
@@ -216,24 +177,20 @@ namespace HyperLiquid.Net.Clients.FuturesApi
                                 
         }
 
-        Task<HttpResult<SharedFuturesTicker[]>> IFuturesTickerRestClient.GetFuturesTickersAsync(GetTickersRequest request, CancellationToken ct)
-            => GetAllFuturesTickersAsync(request, ct);
-        GetAllFuturesTickersOptions IFuturesTickerRestClient.GetFuturesTickersOptions => GetAllFuturesTickersOptions;
-
-        public GetAllFuturesTickersOptions GetAllFuturesTickersOptions { get; } = new GetAllFuturesTickersOptions(_exchangeName);
-        public async Task<HttpResult<SharedFuturesTicker[]>> GetAllFuturesTickersAsync(GetTickersRequest request, CancellationToken ct)
+        GetFuturesTickersOptions IFuturesTickerRestClient.GetFuturesTickersOptions { get; } = new GetFuturesTickersOptions(_exchangeName);
+        async Task<HttpResult<SharedFuturesTicker[]>> IFuturesTickerRestClient.GetFuturesTickersAsync(GetTickersRequest request, CancellationToken ct)
         {
-            var validationError = GetAllFuturesTickersOptions.ValidateRequest(request, this);
+            var validationError = SharedClient.GetFuturesTickersOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return HttpResult.Fail<SharedFuturesTicker[]>(Exchange, validationError);
 
-            var result = await _api.ExchangeData.GetExchangeInfoAndTickersAsync(ct: ct).ConfigureAwait(false);
+            var result = await ExchangeData.GetExchangeInfoAndTickersAsync(ct: ct).ConfigureAwait(false);
             if (!result.Success)
                 return HttpResult.Fail<SharedFuturesTicker[]>(result);
 
             return HttpResult.Ok(result, result.Data.Tickers.Select(x => 
             new SharedFuturesTicker(
-                ExchangeSymbolCache.ParseSymbol(_topicId, _api.EnvironmentName, null, x.Symbol),
+                ExchangeSymbolCache.ParseSymbol(_topicId, EnvironmentName, null, x.Symbol),
                 x.Symbol, 
                 x.MidPrice, 
                 null,
@@ -251,20 +208,20 @@ namespace HyperLiquid.Net.Clients.FuturesApi
 
         #region Book Ticker client
 
-        public GetBookTickerOptions GetBookTickerOptions { get; } = new GetBookTickerOptions(_exchangeName, false);
-        public async Task<HttpResult<SharedBookTicker>> GetBookTickerAsync(GetBookTickerRequest request, CancellationToken ct)
+        GetBookTickerOptions IBookTickerRestClient.GetBookTickerOptions { get; } = new GetBookTickerOptions(_exchangeName, false);
+        async Task<HttpResult<SharedBookTicker>> IBookTickerRestClient.GetBookTickerAsync(GetBookTickerRequest request, CancellationToken ct)
         {
-            var validationError = GetBookTickerOptions.ValidateRequest(request, this);
+            var validationError = SharedClient.GetBookTickerOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return HttpResult.Fail<SharedBookTicker>(Exchange, validationError);
 
             var symbol = request.Symbol!.GetSymbol(FormatSymbol);
-            var resultTicker = await _api.ExchangeData.GetOrderBookAsync(symbol, ct: ct).ConfigureAwait(false);
+            var resultTicker = await ExchangeData.GetOrderBookAsync(symbol, ct: ct).ConfigureAwait(false);
             if (!resultTicker.Success)
                 return HttpResult.Fail<SharedBookTicker>(resultTicker);
 
             return HttpResult.Ok(resultTicker, new SharedBookTicker(
-                ExchangeSymbolCache.ParseSymbol(_topicId, _api.EnvironmentName, null, symbol),
+                ExchangeSymbolCache.ParseSymbol(_topicId, EnvironmentName, null, symbol),
                 symbol,
                 resultTicker.Data.Levels.Asks[0].Price,
                 new SharedOrderQuantity(resultTicker.Data.Levels.Asks[0].Quantity),
@@ -277,9 +234,9 @@ namespace HyperLiquid.Net.Clients.FuturesApi
 
         #region Futures Symbol client
 
-        public SharedSymbolCatalog? FuturesSymbolCatalog => ExchangeSymbolCache.GetSymbolCatalog(_exchangeName, _topicId, _api.EnvironmentName, null);
+        SharedSymbolCatalog? IFuturesSymbolRestClient.FuturesSymbolCatalog => ExchangeSymbolCache.GetSymbolCatalog(_exchangeName, _topicId, EnvironmentName, null);
 
-        public GetFuturesSymbolsOptions GetFuturesSymbolsOptions { get; } = new GetFuturesSymbolsOptions(_exchangeName, false)
+        GetFuturesSymbolsOptions IFuturesSymbolRestClient.GetFuturesSymbolsOptions { get; } = new GetFuturesSymbolsOptions(_exchangeName, false)
         {
             OptionalExchangeParameters = new List<ParameterDescription>
             {
@@ -287,15 +244,15 @@ namespace HyperLiquid.Net.Clients.FuturesApi
             }
         };
 
-        public async Task<HttpResult<SharedFuturesSymbol[]>> GetFuturesSymbolsAsync(GetSymbolsRequest request, CancellationToken ct)
+        async Task<HttpResult<SharedFuturesSymbol[]>> IFuturesSymbolRestClient.GetFuturesSymbolsAsync(GetSymbolsRequest request, CancellationToken ct)
         {
-            var validationError = GetFuturesSymbolsOptions.ValidateRequest(request, this);
+            var validationError = SharedClient.GetFuturesSymbolsOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return HttpResult.Fail<SharedFuturesSymbol[]>(Exchange, validationError);
 
             string? dex = ExchangeParameters.GetValue<string>(request.ExchangeParameters, Exchange, "dex");
-            var annotationsTask = _api.ExchangeData.GetPerpConciseAnnotationsAsync(ct: ct);
-            var exchangeInfoTask = _api.ExchangeData.GetExchangeInfoAllDexesAsync(ct: ct);
+            var annotationsTask = ExchangeData.GetPerpConciseAnnotationsAsync(ct: ct);
+            var exchangeInfoTask = ExchangeData.GetExchangeInfoAllDexesAsync(ct: ct);
             await Task.WhenAll(annotationsTask, exchangeInfoTask).ConfigureAwait(false);
             var annotationsResult = annotationsTask.Result;
             var exchangeInfoResult = exchangeInfoTask.Result;
@@ -316,7 +273,7 @@ namespace HyperLiquid.Net.Clients.FuturesApi
             var symbolRegistrations = resultData
                 .Concat(resultData.Select(x => new SharedSpotSymbol(x.BaseAsset, "USDC", x.BaseAsset, true, TradingMode.PerpetualLinear))).ToArray();
 
-            ExchangeSymbolCache.UpdateSymbolInfo(_topicId, _api.EnvironmentName, dex, symbolRegistrations);
+            ExchangeSymbolCache.UpdateSymbolInfo(_topicId, EnvironmentName, dex, symbolRegistrations);
             return HttpResult.Ok(exchangeInfoResult, SharedUtils.ApplySymbolFilter(resultData, request));
         }
 
@@ -404,57 +361,57 @@ namespace HyperLiquid.Net.Clients.FuturesApi
             return result;
         }
 
-        public async Task<ExchangeCallResult<SharedSymbol[]>> GetFuturesSymbolsForBaseAssetAsync(string baseAsset)
+        async Task<ExchangeCallResult<SharedSymbol[]>> IFuturesSymbolRestClient.GetFuturesSymbolsForBaseAssetAsync(string baseAsset)
         {
-            if (!ExchangeSymbolCache.HasCached(_topicId, _api.EnvironmentName, null))
+            if (!ExchangeSymbolCache.HasCached(_topicId, EnvironmentName, null))
             {
-                var symbols = await GetFuturesSymbolsAsync(new GetSymbolsRequest(), default).ConfigureAwait(false);
+                var symbols = await ((IFuturesSymbolRestClient)this).GetFuturesSymbolsAsync(new GetSymbolsRequest()).ConfigureAwait(false);
                 if (!symbols.Success)
                     return ExchangeCallResult<SharedSymbol[]>.Fail(Exchange, symbols.Error!);
             }
 
-            return ExchangeCallResult<SharedSymbol[]>.Ok(Exchange, ExchangeSymbolCache.GetSymbolsForBaseAsset(_topicId, _api.EnvironmentName, null, baseAsset));
+            return ExchangeCallResult<SharedSymbol[]>.Ok(Exchange, ExchangeSymbolCache.GetSymbolsForBaseAsset(_topicId, EnvironmentName, null, baseAsset));
         }
 
-        public async Task<ExchangeCallResult<bool>> SupportsFuturesSymbolAsync(SharedSymbol symbol)
+        async Task<ExchangeCallResult<bool>> IFuturesSymbolRestClient.SupportsFuturesSymbolAsync(SharedSymbol symbol)
         {
             if (symbol.TradingMode == TradingMode.Spot)
                 throw new ArgumentException(nameof(symbol), "Spot symbols not allowed");
 
-            if (!ExchangeSymbolCache.HasCached(_topicId, _api.EnvironmentName, null))
+            if (!ExchangeSymbolCache.HasCached(_topicId, EnvironmentName, null))
             {
-                var symbols = await GetFuturesSymbolsAsync(new GetSymbolsRequest(), default).ConfigureAwait(false);
+                var symbols = await ((IFuturesSymbolRestClient)this).GetFuturesSymbolsAsync(new GetSymbolsRequest()).ConfigureAwait(false);
                 if (!symbols.Success)
                     return ExchangeCallResult<bool>.Fail(Exchange, symbols.Error!);
             }
 
-            return ExchangeCallResult<bool>.Ok(Exchange, ExchangeSymbolCache.SupportsSymbol(_topicId, _api.EnvironmentName, null, symbol));
+            return ExchangeCallResult<bool>.Ok(Exchange, ExchangeSymbolCache.SupportsSymbol(_topicId, EnvironmentName, null, symbol));
         }
 
-        public async Task<ExchangeCallResult<bool>> SupportsFuturesSymbolAsync(string symbolName)
+        async Task<ExchangeCallResult<bool>> IFuturesSymbolRestClient.SupportsFuturesSymbolAsync(string symbolName)
         {
-            if (!ExchangeSymbolCache.HasCached(_topicId, _api.EnvironmentName, null))
+            if (!ExchangeSymbolCache.HasCached(_topicId, EnvironmentName, null))
             {
-                var symbols = await GetFuturesSymbolsAsync(new GetSymbolsRequest(), default).ConfigureAwait(false);
+                var symbols = await ((IFuturesSymbolRestClient)this).GetFuturesSymbolsAsync(new GetSymbolsRequest()).ConfigureAwait(false);
                 if (!symbols.Success)
                     return ExchangeCallResult<bool>.Fail(Exchange, symbols.Error!);
             }
 
-            return ExchangeCallResult<bool>.Ok(Exchange, ExchangeSymbolCache.SupportsSymbol(_topicId, _api.EnvironmentName, null, symbolName));
+            return ExchangeCallResult<bool>.Ok(Exchange, ExchangeSymbolCache.SupportsSymbol(_topicId, EnvironmentName, null, symbolName));
         }
         #endregion
 
         #region Fee Client
-        public GetFeeOptions GetFeeOptions { get; } = new GetFeeOptions(_exchangeName, true);
+        GetFeeOptions IFeeRestClient.GetFeeOptions { get; } = new GetFeeOptions(_exchangeName, true);
 
-        public async Task<HttpResult<SharedFee>> GetFeesAsync(GetFeeRequest request, CancellationToken ct)
+        async Task<HttpResult<SharedFee>> IFeeRestClient.GetFeesAsync(GetFeeRequest request, CancellationToken ct)
         {
-            var validationError = GetFeeOptions.ValidateRequest(request, this);
+            var validationError = SharedClient.GetFeeOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return HttpResult.Fail<SharedFee>(Exchange, validationError);
 
             // Get data
-            var result = await _api.Account.GetFeeInfoAsync(ct: ct).ConfigureAwait(false);
+            var result = await Account.GetFeeInfoAsync(ct: ct).ConfigureAwait(false);
             if (!result.Success)
                 return HttpResult.Fail<SharedFee>(result);
 
@@ -465,11 +422,11 @@ namespace HyperLiquid.Net.Clients.FuturesApi
         #endregion
 
         #region Funding Rate client
-        public GetFundingRateHistoryOptions GetFundingRateHistoryOptions { get; } = new GetFundingRateHistoryOptions(_exchangeName, true, false, true, 500, false);
+        GetFundingRateHistoryOptions IFundingRateRestClient.GetFundingRateHistoryOptions { get; } = new GetFundingRateHistoryOptions(_exchangeName, true, false, true, 500, false);
 
-        public async Task<HttpResult<SharedFundingRate[]>> GetFundingRateHistoryAsync(GetFundingRateHistoryRequest request, PageRequest? pageToken, CancellationToken ct)
+        async Task<HttpResult<SharedFundingRate[]>> IFundingRateRestClient.GetFundingRateHistoryAsync(GetFundingRateHistoryRequest request, PageRequest? pageToken, CancellationToken ct)
         {
-            var validationError = GetFundingRateHistoryOptions.ValidateRequest(request, this);
+            var validationError = SharedClient.GetFundingRateHistoryOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return HttpResult.Fail<SharedFundingRate[]>(Exchange, validationError);
 
@@ -478,7 +435,7 @@ namespace HyperLiquid.Net.Clients.FuturesApi
             //    fromTime = token.LastTime;
 
             // Get data
-            var result = await _api.ExchangeData.GetFundingRateHistoryAsync(
+            var result = await ExchangeData.GetFundingRateHistoryAsync(
                 request.Symbol!.GetSymbol(FormatSymbol),
                 request.StartTime ?? DateTime.UtcNow.AddDays(-30),
                 //endTime: request.EndTime,
@@ -497,23 +454,23 @@ namespace HyperLiquid.Net.Clients.FuturesApi
         #endregion
 
         #region Leverage client
-        public SharedLeverageSettingMode LeverageSettingType => SharedLeverageSettingMode.PerSymbol;
+        SharedLeverageSettingMode ILeverageRestClient.LeverageSettingType => SharedLeverageSettingMode.PerSymbol;
 
-        public GetLeverageOptions GetLeverageOptions { get; } = new GetLeverageOptions(_exchangeName, true)
+        GetLeverageOptions ILeverageRestClient.GetLeverageOptions { get; } = new GetLeverageOptions(_exchangeName, true)
         {
             OptionalExchangeParameters = new List<ParameterDescription>
             {
                 new ParameterDescription("dex", typeof(string), "DEX to retrieve leverage for", "xyz")
             }
         };
-        public async Task<HttpResult<SharedLeverage>> GetLeverageAsync(GetLeverageRequest request, CancellationToken ct)
+        async Task<HttpResult<SharedLeverage>> ILeverageRestClient.GetLeverageAsync(GetLeverageRequest request, CancellationToken ct)
         {
-            var validationError = GetLeverageOptions.ValidateRequest(request, this);
+            var validationError = SharedClient.GetLeverageOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return HttpResult.Fail<SharedLeverage>(Exchange, validationError);
 
             string? dex = ExchangeParameters.GetValue<string>(request.ExchangeParameters, Exchange, "dex");
-            var result = await _api.Account.GetAccountInfoAsync(dex: dex, ct: ct).ConfigureAwait(false);
+            var result = await Account.GetAccountInfoAsync(dex: dex, ct: ct).ConfigureAwait(false);
             if (!result.Success)
                 return HttpResult.Fail<SharedLeverage>(result);
 
@@ -525,20 +482,20 @@ namespace HyperLiquid.Net.Clients.FuturesApi
                                 
         }
 
-        public SetLeverageOptions SetLeverageOptions { get; } = new SetLeverageOptions(_exchangeName)
+        SetLeverageOptions ILeverageRestClient.SetLeverageOptions { get; } = new SetLeverageOptions(_exchangeName)
         {
-            RequiredRequestParameters = new List<ParameterDescription>
+            RequiredOptionalParameters = new List<ParameterDescription>
             {
                 new ParameterDescription(nameof(SetLeverageRequest.MarginMode), typeof(SharedMarginMode), "Margin mode", SharedMarginMode.Isolated)
             }
         };
-        public async Task<HttpResult<SharedLeverage>> SetLeverageAsync(SetLeverageRequest request, CancellationToken ct)
+        async Task<HttpResult<SharedLeverage>> ILeverageRestClient.SetLeverageAsync(SetLeverageRequest request, CancellationToken ct)
         {
-            var validationError = SetLeverageOptions.ValidateRequest(request, this);
+            var validationError = SharedClient.SetLeverageOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return HttpResult.Fail<SharedLeverage>(Exchange, validationError);
 
-            var result = await _api.Trading.SetLeverageAsync(symbol: request.Symbol!.GetSymbol(FormatSymbol), (int)request.Leverage, request.MarginMode == SharedMarginMode.Isolated ? Enums.MarginType.Isolated : Enums.MarginType.Cross, ct: ct).ConfigureAwait(false);
+            var result = await Trading.SetLeverageAsync(symbol: request.Symbol!.GetSymbol(FormatSymbol), (int)request.Leverage, request.MarginMode == SharedMarginMode.Isolated ? Enums.MarginType.Isolated : Enums.MarginType.Cross, ct: ct).ConfigureAwait(false);
             if (!result.Success)
                 return HttpResult.Fail<SharedLeverage>(result);
 
@@ -552,14 +509,14 @@ namespace HyperLiquid.Net.Clients.FuturesApi
 
         #region Open Interest client
 
-        public GetOpenInterestOptions GetOpenInterestOptions { get; } = new GetOpenInterestOptions(_exchangeName, false);
-        public async Task<HttpResult<SharedOpenInterest>> GetOpenInterestAsync(GetOpenInterestRequest request, CancellationToken ct)
+        GetOpenInterestOptions IOpenInterestRestClient.GetOpenInterestOptions { get; } = new GetOpenInterestOptions(_exchangeName, false);
+        async Task<HttpResult<SharedOpenInterest>> IOpenInterestRestClient.GetOpenInterestAsync(GetOpenInterestRequest request, CancellationToken ct)
         {
-            var validationError = GetOpenInterestOptions.ValidateRequest(request, this);
+            var validationError = SharedClient.GetOpenInterestOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return HttpResult.Fail<SharedOpenInterest>(Exchange, validationError);
 
-            var result = await _api.ExchangeData.GetExchangeInfoAndTickersAsync(ct: ct).ConfigureAwait(false);
+            var result = await ExchangeData.GetExchangeInfoAndTickersAsync(ct: ct).ConfigureAwait(false);
             if (!result.Success)
                 return HttpResult.Fail<SharedOpenInterest>(result);
 
@@ -575,22 +532,22 @@ namespace HyperLiquid.Net.Clients.FuturesApi
 
         #region Futures Order Client
 
-        public SharedFeeDeductionType FuturesFeeDeductionType => SharedFeeDeductionType.AddToCost;
-        public SharedFeeAssetType FuturesFeeAssetType => SharedFeeAssetType.QuoteAsset;
+        SharedFeeDeductionType IFuturesOrderRestClient.FuturesFeeDeductionType => SharedFeeDeductionType.AddToCost;
+        SharedFeeAssetType IFuturesOrderRestClient.FuturesFeeAssetType => SharedFeeAssetType.QuoteAsset;
 
-        public SharedOrderType[] FuturesSupportedOrderTypes { get; } = new[] { SharedOrderType.Limit, SharedOrderType.Market };
-        public SharedTimeInForce[] FuturesSupportedTimeInForce { get; } = new[] { SharedTimeInForce.GoodTillCanceled, SharedTimeInForce.ImmediateOrCancel };
-        public SharedQuantitySupport FuturesSupportedOrderQuantity { get; } = new SharedQuantitySupport(
+        SharedOrderType[] IFuturesOrderRestClient.FuturesSupportedOrderTypes { get; } = new[] { SharedOrderType.Limit, SharedOrderType.Market };
+        SharedTimeInForce[] IFuturesOrderRestClient.FuturesSupportedTimeInForce { get; } = new[] { SharedTimeInForce.GoodTillCanceled, SharedTimeInForce.ImmediateOrCancel };
+        SharedQuantitySupport IFuturesOrderRestClient.FuturesSupportedOrderQuantity { get; } = new SharedQuantitySupport(
                 SharedQuantityType.BaseAsset,
                 SharedQuantityType.BaseAsset,
                 SharedQuantityType.BaseAsset,
                 SharedQuantityType.BaseAsset);
 
-        public string GenerateClientOrderId() => ExchangeHelpers.RandomHexString(16)!.ToLowerInvariant();
+        string IFuturesOrderRestClient.GenerateClientOrderId() => ExchangeHelpers.RandomHexString(16)!.ToLowerInvariant();
 
-        public PlaceFuturesOrderOptions PlaceFuturesOrderOptions { get; } = new PlaceFuturesOrderOptions(_exchangeName, false)
+        PlaceFuturesOrderOptions IFuturesOrderRestClient.PlaceFuturesOrderOptions { get; } = new PlaceFuturesOrderOptions(_exchangeName, false)
         {
-            RequiredRequestParameters = new List<ParameterDescription>
+            RequiredOptionalParameters = new List<ParameterDescription>
             {
                 new ParameterDescription(nameof(PlaceSpotOrderRequest.Price), typeof(decimal), "Price for the order. For market orders this should be the current symbol price", 21.5m)
             },
@@ -599,13 +556,13 @@ namespace HyperLiquid.Net.Clients.FuturesApi
                 new ParameterDescription("vaultAddress", typeof(string), "Vault address to place the order on behalf of", "0x123...")
             }
         };
-        public async Task<HttpResult<SharedId>> PlaceFuturesOrderAsync(PlaceFuturesOrderRequest request, CancellationToken ct)
+        async Task<HttpResult<SharedId>> IFuturesOrderRestClient.PlaceFuturesOrderAsync(PlaceFuturesOrderRequest request, CancellationToken ct)
         {
-            var validationError = PlaceFuturesOrderOptions.ValidateRequest(request, this);
+            var validationError = SharedClient.PlaceFuturesOrderOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return HttpResult.Fail<SharedId>(Exchange, validationError);
 
-            var result = await _api.Trading.PlaceOrderAsync(
+            var result = await Trading.PlaceOrderAsync(
                 request.Symbol!.GetSymbol(FormatSymbol),
                 request.Side == SharedOrderSide.Buy ? Enums.OrderSide.Buy : Enums.OrderSide.Sell,
                 request.OrderType == SharedOrderType.Limit || request.OrderType == SharedOrderType.LimitMaker ? Enums.OrderType.Limit : Enums.OrderType.Market,
@@ -624,22 +581,22 @@ namespace HyperLiquid.Net.Clients.FuturesApi
                                 
         }
 
-        public GetFuturesOrderOptions GetFuturesOrderOptions { get; } = new GetFuturesOrderOptions(_exchangeName, true);
-        public async Task<HttpResult<SharedFuturesOrder>> GetFuturesOrderAsync(GetOrderRequest request, CancellationToken ct)
+        GetFuturesOrderOptions IFuturesOrderRestClient.GetFuturesOrderOptions { get; } = new GetFuturesOrderOptions(_exchangeName, true);
+        async Task<HttpResult<SharedFuturesOrder>> IFuturesOrderRestClient.GetFuturesOrderAsync(GetOrderRequest request, CancellationToken ct)
         {
-            var validationError = GetFuturesOrderOptions.ValidateRequest(request, this);
+            var validationError = SharedClient.GetFuturesOrderOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return HttpResult.Fail<SharedFuturesOrder>(Exchange, validationError);
 
             if (!long.TryParse(request.OrderId, out var orderId))
                 return HttpResult.Fail<SharedFuturesOrder>(Exchange, ArgumentError.Invalid(nameof(GetOrderRequest.OrderId), "Invalid order id"));
 
-            var order = await _api.Trading.GetOrderAsync(orderId, ct: ct).ConfigureAwait(false);
+            var order = await Trading.GetOrderAsync(orderId, ct: ct).ConfigureAwait(false);
             if (!order.Success)
                 return HttpResult.Fail<SharedFuturesOrder>(order);
 
             return HttpResult.Ok(order, new SharedFuturesOrder(
-                ExchangeSymbolCache.ParseSymbol(_topicId, _api.EnvironmentName, null, order.Data.Order.Symbol),
+                ExchangeSymbolCache.ParseSymbol(_topicId, EnvironmentName, null, order.Data.Order.Symbol),
                 order.Data.Order.Symbol!,
                 order.Data.Order.OrderId.ToString(),
                 ParseOrderType(order.Data.Order.OrderType),
@@ -660,16 +617,16 @@ namespace HyperLiquid.Net.Clients.FuturesApi
                                 
         }
 
-        public GetOpenFuturesOrdersOptions GetOpenFuturesOrdersOptions { get; } = new GetOpenFuturesOrdersOptions(_exchangeName, true)
+        GetOpenFuturesOrdersOptions IFuturesOrderRestClient.GetOpenFuturesOrdersOptions { get; } = new GetOpenFuturesOrdersOptions(_exchangeName, true)
         {
             OptionalExchangeParameters = new List<ParameterDescription>
             {
                 new ParameterDescription("dex", typeof(string), "DEX to retrieve open orders for", "xyz")
             }
         };
-        public async Task<HttpResult<SharedFuturesOrder[]>> GetOpenFuturesOrdersAsync(GetOpenOrdersRequest request, CancellationToken ct)
+        async Task<HttpResult<SharedFuturesOrder[]>> IFuturesOrderRestClient.GetOpenFuturesOrdersAsync(GetOpenOrdersRequest request, CancellationToken ct)
         {
-            var validationError = GetOpenFuturesOrdersOptions.ValidateRequest(request, this);
+            var validationError = SharedClient.GetOpenFuturesOrdersOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return HttpResult.Fail<SharedFuturesOrder[]>(Exchange, validationError);
 
@@ -684,7 +641,7 @@ namespace HyperLiquid.Net.Clients.FuturesApi
                     dex = symbol.Substring(0, dexSeparatorIndex);
             }
 
-            var orders = await _api.Trading.GetOpenOrdersExtendedAsync(dex: dex, ct: ct).ConfigureAwait(false);
+            var orders = await Trading.GetOpenOrdersExtendedAsync(dex: dex, ct: ct).ConfigureAwait(false);
             if (!orders.Success)
                 return HttpResult.Fail<SharedFuturesOrder[]>(orders);
 
@@ -693,7 +650,7 @@ namespace HyperLiquid.Net.Clients.FuturesApi
                 data = data.Where(x => x.Symbol == symbol);
 
             return HttpResult.Ok(orders, orders.Data.Select(x => new SharedFuturesOrder(
-                ExchangeSymbolCache.ParseSymbol(_topicId, _api.EnvironmentName, null, x.Symbol),
+                ExchangeSymbolCache.ParseSymbol(_topicId, EnvironmentName, null, x.Symbol),
                 x.Symbol!,
                 x.OrderId.ToString(),
                 ParseOrderType(x.OrderType),
@@ -714,15 +671,15 @@ namespace HyperLiquid.Net.Clients.FuturesApi
                                 
         }
 
-        public GetFuturesClosedOrdersOptions GetClosedFuturesOrdersOptions { get; } = new GetFuturesClosedOrdersOptions(_exchangeName, true, true, false, 2000);
-        public async Task<HttpResult<SharedFuturesOrder[]>> GetClosedFuturesOrdersAsync(GetClosedOrdersRequest request, PageRequest? pageToken, CancellationToken ct)
+        GetFuturesClosedOrdersOptions IFuturesOrderRestClient.GetClosedFuturesOrdersOptions { get; } = new GetFuturesClosedOrdersOptions(_exchangeName, true, true, false, 2000);
+        async Task<HttpResult<SharedFuturesOrder[]>> IFuturesOrderRestClient.GetClosedFuturesOrdersAsync(GetClosedOrdersRequest request, PageRequest? pageToken, CancellationToken ct)
         {
-            var validationError = GetClosedFuturesOrdersOptions.ValidateRequest(request, this);
+            var validationError = SharedClient.GetClosedFuturesOrdersOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return HttpResult.Fail<SharedFuturesOrder[]>(Exchange, validationError);
 
             // Get data
-            var orders = await _api.Trading.GetOrderHistoryAsync(ct: ct).ConfigureAwait(false);
+            var orders = await Trading.GetOrderHistoryAsync(ct: ct).ConfigureAwait(false);
             if (!orders.Success)
                 return HttpResult.Fail<SharedFuturesOrder[]>(orders);
 
@@ -738,7 +695,7 @@ namespace HyperLiquid.Net.Clients.FuturesApi
             return HttpResult.Ok(orders, ExchangeHelpers.ApplyFilter(data, x => x.Timestamp, request.StartTime, request.EndTime, request.Direction ?? DataDirection.Descending)
                 .Select(x =>
                     new SharedFuturesOrder(
-                        ExchangeSymbolCache.ParseSymbol(_topicId, _api.EnvironmentName, null, x.Order.Symbol!), 
+                        ExchangeSymbolCache.ParseSymbol(_topicId, EnvironmentName, null, x.Order.Symbol!), 
                         x.Order.Symbol!,
                         x.Order.OrderId.ToString(),
                         ParseOrderType(x.Order.OrderType),
@@ -759,23 +716,23 @@ namespace HyperLiquid.Net.Clients.FuturesApi
                                 
         }
 
-        public GetFuturesOrderTradesOptions GetFuturesOrderTradesOptions { get; } = new GetFuturesOrderTradesOptions(_exchangeName, true);
-        public async Task<HttpResult<SharedUserTrade[]>> GetFuturesOrderTradesAsync(GetOrderTradesRequest request, CancellationToken ct)
+        GetFuturesOrderTradesOptions IFuturesOrderRestClient.GetFuturesOrderTradesOptions { get; } = new GetFuturesOrderTradesOptions(_exchangeName, true);
+        async Task<HttpResult<SharedUserTrade[]>> IFuturesOrderRestClient.GetFuturesOrderTradesAsync(GetOrderTradesRequest request, CancellationToken ct)
         {
-            var validationError = GetFuturesOrderTradesOptions.ValidateRequest(request, this);
+            var validationError = SharedClient.GetFuturesOrderTradesOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return HttpResult.Fail<SharedUserTrade[]>(Exchange, validationError);
 
             if (!long.TryParse(request.OrderId, out var orderId))
                 return HttpResult.Fail<SharedUserTrade[]>(Exchange, ArgumentError.Invalid(nameof(GetOrderTradesRequest.OrderId), "Invalid order id"));
 
-            var orders = await _api.Trading.GetUserTradesAsync(ct: ct).ConfigureAwait(false);
+            var orders = await Trading.GetUserTradesAsync(ct: ct).ConfigureAwait(false);
             if (!orders.Success)
                 return HttpResult.Fail<SharedUserTrade[]>(orders);
 
             var data = orders.Data.Where(x => x.OrderId == orderId);
             return HttpResult.Ok(orders, data.Select(x => new SharedUserTrade(
-                ExchangeSymbolCache.ParseSymbol(_topicId, _api.EnvironmentName, null, x.Symbol), 
+                ExchangeSymbolCache.ParseSymbol(_topicId, EnvironmentName, null, x.Symbol), 
                 x.Symbol,
                 x.OrderId.ToString(),
                 x.TradeId.ToString(),
@@ -791,14 +748,10 @@ namespace HyperLiquid.Net.Clients.FuturesApi
                                 
         }
 
-        Task<HttpResult<SharedUserTrade[]>> IFuturesOrderRestClient.GetFuturesUserTradesAsync(GetUserTradesRequest request, PageRequest? pageRequest, CancellationToken ct)
-            => GetFuturesUserTradeHistoryAsync(request, pageRequest, ct);
-        GetFuturesUserTradeHistoryOptions IFuturesOrderRestClient.GetFuturesUserTradesOptions => GetFuturesUserTradeHistoryOptions;
-
-        public GetFuturesUserTradeHistoryOptions GetFuturesUserTradeHistoryOptions { get; } = new GetFuturesUserTradeHistoryOptions(_exchangeName, true, false, true, 2000);
-        public async Task<HttpResult<SharedUserTrade[]>> GetFuturesUserTradeHistoryAsync(GetUserTradesRequest request, PageRequest? pageRequest, CancellationToken ct)
+        GetFuturesUserTradesOptions IFuturesOrderRestClient.GetFuturesUserTradesOptions { get; } = new GetFuturesUserTradesOptions(_exchangeName, true, false, true, 2000);
+        async Task<HttpResult<SharedUserTrade[]>> IFuturesOrderRestClient.GetFuturesUserTradesAsync(GetUserTradesRequest request, PageRequest? pageRequest, CancellationToken ct)
         {
-            var validationError = GetFuturesUserTradeHistoryOptions.ValidateRequest(request, this);
+            var validationError = SharedClient.GetFuturesUserTradesOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return HttpResult.Fail<SharedUserTrade[]>(Exchange, validationError);
 
@@ -807,7 +760,7 @@ namespace HyperLiquid.Net.Clients.FuturesApi
             var pageParams = Pagination.GetPaginationParameters(direction, limit, request.StartTime, request.EndTime ?? DateTime.UtcNow, pageRequest, false);
 
             // Get data
-            var result = await _api.Trading.GetUserTradesByTimeAsync(
+            var result = await Trading.GetUserTradesByTimeAsync(
                 startTime: pageParams.StartTime ?? DateTime.UtcNow.AddDays(-7),
                 ct: ct
                 ).ConfigureAwait(false);
@@ -826,7 +779,7 @@ namespace HyperLiquid.Net.Clients.FuturesApi
             return HttpResult.Ok(result, ExchangeHelpers.ApplyFilter(data, x => x.Timestamp, request.StartTime, request.EndTime, direction)
                     .Select(x =>
                         new SharedUserTrade(
-                            ExchangeSymbolCache.ParseSymbol(_topicId, _api.EnvironmentName, null, x.Symbol), 
+                            ExchangeSymbolCache.ParseSymbol(_topicId, EnvironmentName, null, x.Symbol), 
                             x.Symbol,
                             x.OrderId.ToString(),
                             x.TradeId.ToString(),
@@ -843,23 +796,23 @@ namespace HyperLiquid.Net.Clients.FuturesApi
                                 
         }
 
-        public CancelFuturesOrderOptions CancelFuturesOrderOptions { get; } = new CancelFuturesOrderOptions(_exchangeName, true)
+        CancelFuturesOrderOptions IFuturesOrderRestClient.CancelFuturesOrderOptions { get; } = new CancelFuturesOrderOptions(_exchangeName, true)
         {
             OptionalExchangeParameters = new List<ParameterDescription>
             {
                 new ParameterDescription("vaultAddress", typeof(string), "Vault address to cancel the order on behalf of", "0x123...")
             }
         };
-        public async Task<HttpResult<SharedId>> CancelFuturesOrderAsync(CancelOrderRequest request, CancellationToken ct)
+        async Task<HttpResult<SharedId>> IFuturesOrderRestClient.CancelFuturesOrderAsync(CancelOrderRequest request, CancellationToken ct)
         {
-            var validationError = CancelFuturesOrderOptions.ValidateRequest(request, this);
+            var validationError = SharedClient.CancelFuturesOrderOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return HttpResult.Fail<SharedId>(Exchange, validationError);
 
             if (!long.TryParse(request.OrderId, out var orderId))
                 return HttpResult.Fail<SharedId>(Exchange, ArgumentError.Invalid(nameof(CancelOrderRequest.OrderId), "Invalid order id"));
 
-            var order = await _api.Trading.CancelOrderAsync(
+            var order = await Trading.CancelOrderAsync(
                 request.Symbol!.GetSymbol(FormatSymbol),
                 orderId,
                 vaultAddress: request.GetParamValue<string?>(Exchange, "vaultAddress"),
@@ -871,21 +824,21 @@ namespace HyperLiquid.Net.Clients.FuturesApi
                                 
         }
 
-        public GetPositionsOptions GetPositionsOptions { get; } = new GetPositionsOptions(_exchangeName, true)
+        GetPositionsOptions IFuturesOrderRestClient.GetPositionsOptions { get; } = new GetPositionsOptions(_exchangeName, true)
         {
             OptionalExchangeParameters = new List<ParameterDescription>
             {
                 new ParameterDescription("dex", typeof(string), "DEX to retrieve leverage for", "xyz")
             }
         };
-        public async Task<HttpResult<SharedPosition[]>> GetPositionsAsync(GetPositionsRequest request, CancellationToken ct)
+        async Task<HttpResult<SharedPosition[]>> IFuturesOrderRestClient.GetPositionsAsync(GetPositionsRequest request, CancellationToken ct)
         {
-            var validationError = GetPositionsOptions.ValidateRequest(request, this);
+            var validationError = SharedClient.GetPositionsOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return HttpResult.Fail<SharedPosition[]>(Exchange, validationError);
 
             string? dex = ExchangeParameters.GetValue<string>(request.ExchangeParameters, Exchange, "dex");
-            var result = await _api.Account.GetAccountInfoAsync(dex: dex, ct: ct).ConfigureAwait(false);
+            var result = await Account.GetAccountInfoAsync(dex: dex, ct: ct).ConfigureAwait(false);
             if (!result.Success)
                 return HttpResult.Fail<SharedPosition[]>(result);
 
@@ -896,7 +849,7 @@ namespace HyperLiquid.Net.Clients.FuturesApi
             var resultTypes = request.Symbol == null && request.TradingMode == null ? SupportedTradingModes : request.Symbol != null ? new[] { request.Symbol.TradingMode } : new[] { request.TradingMode!.Value };
             return HttpResult.Ok(result, data.Select(x => 
             new SharedPosition(
-                ExchangeSymbolCache.ParseSymbol(_topicId, _api.EnvironmentName, null, x.Position.Symbol), 
+                ExchangeSymbolCache.ParseSymbol(_topicId, EnvironmentName, null, x.Position.Symbol), 
                 x.Position.Symbol, 
                 new SharedOrderQuantity(Math.Abs(x.Position.PositionQuantity ?? 0)),
                 null)
@@ -911,9 +864,9 @@ namespace HyperLiquid.Net.Clients.FuturesApi
                                 
         }
 
-        public ClosePositionOptions ClosePositionOptions { get; } = new ClosePositionOptions(_exchangeName, true)
+        ClosePositionOptions IFuturesOrderRestClient.ClosePositionOptions { get; } = new ClosePositionOptions(_exchangeName, true)
         {
-            RequiredRequestParameters = new List<ParameterDescription>
+            RequiredOptionalParameters = new List<ParameterDescription>
             {
                 new ParameterDescription(nameof(ClosePositionRequest.PositionSide), typeof(SharedPositionSide), "The position side to close", SharedPositionSide.Long),
                 new ParameterDescription(nameof(ClosePositionRequest.Quantity), typeof(decimal), "Quantity of the position is required", 0.1m)
@@ -927,14 +880,14 @@ namespace HyperLiquid.Net.Clients.FuturesApi
                 new ParameterDescription("vaultAddress", typeof(string), "Vault address to place the order on behalf of", "0x123...")
             }
         };
-        public async Task<HttpResult<SharedId>> ClosePositionAsync(ClosePositionRequest request, CancellationToken ct)
+        async Task<HttpResult<SharedId>> IFuturesOrderRestClient.ClosePositionAsync(ClosePositionRequest request, CancellationToken ct)
         {
-            var validationError = ClosePositionOptions.ValidateRequest(request, this);
+            var validationError = SharedClient.ClosePositionOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return HttpResult.Fail<SharedId>(Exchange, validationError);
 
             var symbol = request.Symbol!.GetSymbol(FormatSymbol);
-            var result = await _api.Trading.PlaceOrderAsync(
+            var result = await Trading.PlaceOrderAsync(
                 request.Symbol.GetSymbol(FormatSymbol),
                 request.PositionSide == SharedPositionSide.Long ? Enums.OrderSide.Sell : Enums.OrderSide.Buy,
                 Enums.OrderType.Market,
@@ -1016,19 +969,19 @@ namespace HyperLiquid.Net.Clients.FuturesApi
 
         #region Futures Client Id Order Client
 
-        public GetFuturesOrderByClientOrderIdOptions GetFuturesOrderByClientOrderIdOptions { get; } = new GetFuturesOrderByClientOrderIdOptions(_exchangeName, true);
-        public async Task<HttpResult<SharedFuturesOrder>> GetFuturesOrderByClientOrderIdAsync(GetOrderRequest request, CancellationToken ct)
+        GetFuturesOrderByClientOrderIdOptions IFuturesOrderClientIdRestClient.GetFuturesOrderByClientOrderIdOptions { get; } = new GetFuturesOrderByClientOrderIdOptions(_exchangeName, true);
+        async Task<HttpResult<SharedFuturesOrder>> IFuturesOrderClientIdRestClient.GetFuturesOrderByClientOrderIdAsync(GetOrderRequest request, CancellationToken ct)
         {
-            var validationError = GetFuturesOrderByClientOrderIdOptions.ValidateRequest(request, this);
+            var validationError = SharedClient.GetFuturesOrderByClientOrderIdOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return HttpResult.Fail<SharedFuturesOrder>(Exchange, validationError);
 
-            var order = await _api.Trading.GetOrderAsync(clientOrderId: request.OrderId, ct: ct).ConfigureAwait(false);
+            var order = await Trading.GetOrderAsync(clientOrderId: request.OrderId, ct: ct).ConfigureAwait(false);
             if (!order.Success)
                 return HttpResult.Fail<SharedFuturesOrder>(order);
 
             return HttpResult.Ok(order, new SharedFuturesOrder(
-                ExchangeSymbolCache.ParseSymbol(_topicId, _api.EnvironmentName, null, order.Data.Order.Symbol!),
+                ExchangeSymbolCache.ParseSymbol(_topicId, EnvironmentName, null, order.Data.Order.Symbol!),
                 order.Data.Order.Symbol!,
                 order.Data.Order.OrderId.ToString(),
                 ParseOrderType(order.Data.Order.OrderType),
@@ -1048,20 +1001,20 @@ namespace HyperLiquid.Net.Clients.FuturesApi
                                 
         }
 
-        public CancelFuturesOrderByClientOrderIdOptions CancelFuturesOrderByClientOrderIdOptions { get; } = new CancelFuturesOrderByClientOrderIdOptions(_exchangeName, true)
+        CancelFuturesOrderByClientOrderIdOptions IFuturesOrderClientIdRestClient.CancelFuturesOrderByClientOrderIdOptions { get; } = new CancelFuturesOrderByClientOrderIdOptions(_exchangeName, true)
         {
             OptionalExchangeParameters = new List<ParameterDescription>
             {
                 new ParameterDescription("vaultAddress", typeof(string), "Vault address to cancel the order on behalf of", "0x123...")
             }
         };
-        public async Task<HttpResult<SharedId>> CancelFuturesOrderByClientOrderIdAsync(CancelOrderRequest request, CancellationToken ct)
+        async Task<HttpResult<SharedId>> IFuturesOrderClientIdRestClient.CancelFuturesOrderByClientOrderIdAsync(CancelOrderRequest request, CancellationToken ct)
         {
-            var validationError = CancelFuturesOrderByClientOrderIdOptions.ValidateRequest(request, this);
+            var validationError = SharedClient.CancelFuturesOrderByClientOrderIdOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return HttpResult.Fail<SharedId>(Exchange, validationError);
 
-            var order = await _api.Trading.CancelOrderByClientOrderIdAsync(
+            var order = await Trading.CancelOrderByClientOrderIdAsync(
                 request.Symbol!.GetSymbol(FormatSymbol), 
                 clientOrderId: request.OrderId,
                 vaultAddress: request.GetParamValue<string?>(Exchange, "vaultAddress"),
@@ -1075,22 +1028,22 @@ namespace HyperLiquid.Net.Clients.FuturesApi
         #endregion
 
         #region Tp/SL Client
-        public SetFuturesTpSlOptions SetFuturesTpSlOptions { get; } = new SetFuturesTpSlOptions(_exchangeName, true)
+        SetFuturesTpSlOptions IFuturesTpSlRestClient.SetFuturesTpSlOptions { get; } = new SetFuturesTpSlOptions(_exchangeName, true)
         {
             RequestNotes = "API doesn't return an id for trigger orders",
-            RequiredRequestParameters = new List<ParameterDescription>
+            RequiredOptionalParameters = new List<ParameterDescription>
             {
                 new ParameterDescription(nameof(SetTpSlRequest.Quantity), typeof(decimal), "The quantity to close", 0.123m)
             }
         };
 
-        public async Task<HttpResult<SharedId>> SetFuturesTpSlAsync(SetTpSlRequest request, CancellationToken ct)
+        async Task<HttpResult<SharedId>> IFuturesTpSlRestClient.SetFuturesTpSlAsync(SetTpSlRequest request, CancellationToken ct)
         {
-            var validationError = SetFuturesTpSlOptions.ValidateRequest(request, this);
+            var validationError = SharedClient.SetFuturesTpSlOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return HttpResult.Fail<SharedId>(Exchange, validationError);
 
-            var result = await _api.Trading.PlaceOrderAsync(
+            var result = await Trading.PlaceOrderAsync(
                 request.Symbol!.GetSymbol(FormatSymbol),
                 request.PositionSide == SharedPositionSide.Long ? OrderSide.Sell : OrderSide.Buy,
                 OrderType.StopMarket,
@@ -1110,24 +1063,24 @@ namespace HyperLiquid.Net.Clients.FuturesApi
                                 
         }
 
-        public CancelFuturesTpSlOptions CancelFuturesTpSlOptions { get; } = new CancelFuturesTpSlOptions(_exchangeName, true)
+        CancelFuturesTpSlOptions IFuturesTpSlRestClient.CancelFuturesTpSlOptions { get; } = new CancelFuturesTpSlOptions(_exchangeName, true)
         {
-            RequiredRequestParameters = new List<ParameterDescription>
+            RequiredOptionalParameters = new List<ParameterDescription>
             {
                 new ParameterDescription(nameof(CancelTpSlRequest.OrderId), typeof(string), "Id of the tp/sl order", "123123")
             }
         };
 
-        public async Task<HttpResult<bool>> CancelFuturesTpSlAsync(CancelTpSlRequest request, CancellationToken ct)
+        async Task<HttpResult<bool>> IFuturesTpSlRestClient.CancelFuturesTpSlAsync(CancelTpSlRequest request, CancellationToken ct)
         {
-            var validationError = CancelFuturesTpSlOptions.ValidateRequest(request, this);
+            var validationError = SharedClient.CancelFuturesTpSlOptions.ValidateRequest(request, this);
             if (validationError != null)
                 return HttpResult.Fail<bool>(Exchange, validationError);
 
             if (!long.TryParse(request.OrderId, out var orderId) || orderId == 0)
                 return HttpResult.Fail<bool>(Exchange, ArgumentError.Invalid(nameof(CancelTpSlRequest.OrderId), "Invalid order id"));
 
-            var result = await _api.Trading.CancelOrderAsync(
+            var result = await Trading.CancelOrderAsync(
                 request.Symbol!.GetSymbol(FormatSymbol),
                 orderId,
                 ct: ct).ConfigureAwait(false);
