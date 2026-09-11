@@ -224,6 +224,7 @@ namespace HyperLiquid.Net.Clients.BaseApi
         public async Task<QueryResult> ApproveAgentAsync(
             string agentAddress,
             string? agentName = null,
+            DateTime? validUntil = null,
             CancellationToken ct = default)
         {
             var parameters = new Parameters(HyperLiquidExchange._parameterSerializationSettings);
@@ -240,8 +241,9 @@ namespace HyperLiquid.Net.Clients.BaseApi
             };
 
             //sent as an empty string rather than omitted when there is no name: the field is part of the signed
-            //type list either way, so leaving it out would sign a three-field struct against a four-field schema
-            actionParameters.Add("agentName", agentName ?? string.Empty);
+            //type list either way, so leaving it out would sign a three-field struct against a four-field schema.
+            //An expiration, when given, is a suffix on this same field - see BuildAgentName.
+            actionParameters.Add("agentName", HyperLiquidUtils.BuildAgentName(agentName, validUntil));
             actionParameters.Add("nonce", DateTime.UtcNow);
             parameters.Add("action", actionParameters);
 
@@ -258,8 +260,9 @@ namespace HyperLiquid.Net.Clients.BaseApi
             string? agentName = null,
             CancellationToken ct = default)
         {
-            //an approval pointed at nothing - see the remarks on the interface method
-            return ApproveAgentAsync(ZeroAddress, agentName, ct);
+            //an approval pointed at nothing - see the remarks on the interface method. No expiration: the name
+            //has to match the agent being removed, and a valid_until suffix would not.
+            return ApproveAgentAsync(ZeroAddress, agentName, validUntil: null, ct: ct);
         }
 
         /// <summary>The address an approval names when it is removing an agent rather than authorising one.</summary>

@@ -126,10 +126,17 @@ namespace HyperLiquid.Net.Interfaces.Clients.BaseApi
         /// </summary>
         /// <param name="agentAddress">["<c>agentAddress</c>"] Address of the API wallet in 42-character hexadecimal format; e.g. 0x0000000000000000000000000000000000000000</param>
         /// <param name="agentName">["<c>agentName</c>"] Optional name for the API wallet</param>
+        /// <param name="validUntil">
+        /// Optional expiration for the API wallet, at most 180 days ahead. Null leaves it out and takes whatever
+        /// default HyperLiquid applies, which is not the maximum. HyperLiquid has no field for this - it is sent
+        /// as a "valid_until {timestamp}" suffix on the name - so it requires <paramref name="agentName"/> and
+        /// does not apply to the unnamed API wallet.
+        /// </param>
         /// <param name="ct">Cancellation token</param>
         Task<HttpResult> ApproveAgentAsync(
             string agentAddress,
             string? agentName = null,
+            DateTime? validUntil = null,
             CancellationToken ct = default);
 
         /// <summary>
