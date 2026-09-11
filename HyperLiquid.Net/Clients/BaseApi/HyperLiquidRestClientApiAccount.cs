@@ -198,6 +198,41 @@ namespace HyperLiquid.Net.Clients.BaseApi
 
         #endregion
 
+
+        #region Approve Agent
+
+        /// <inheritdoc />
+        public async Task<HttpResult> ApproveAgentAsync(
+            string agentAddress,
+            string? agentName = null,
+            CancellationToken ct = default)
+        {
+            await HyperLiquidUtils.CheckBuilderFeeAsync(_baseClient.BaseClient).ConfigureAwait(false);
+
+            var parameters = new Parameters(HyperLiquidExchange._parameterSerializationSettings);
+
+            //the order of these fields is the order of the EIP-712 type list, which is part of the struct hash -
+            //hyperliquidChain, agentAddress, agentName, nonce. Adding them in any other order signs a different
+            //message than the one the exchange verifies.
+            var actionParameters = new Parameters(HyperLiquidExchange._parameterSerializationSettings)
+            {
+                { "type", "approveAgent" },
+                { "hyperliquidChain", _baseClient.ClientOptions.Environment.Name == TradeEnvironmentNames.Testnet ? "Testnet" : "Mainnet" },
+                { "signatureChainId", _baseClient.ClientOptions.Environment.Name == TradeEnvironmentNames.Testnet ? _chainIdTestnet : _chainIdMainnet },
+                { "agentAddress", agentAddress },
+            };
+
+            //sent as an empty string rather than omitted when there is no name: the field is part of the signed
+            //type list either way, so leaving it out would sign a three-field struct against a four-field schema
+            actionParameters.Add("agentName", agentName ?? string.Empty);
+            actionParameters.Add("nonce", DateTime.UtcNow);
+            parameters.Add("action", actionParameters);
+
+            var request = _definitions.GetOrCreate(HttpMethod.Post, _baseClient.BaseAddress, "exchange", HyperLiquidExchange.RateLimiter.HyperLiquidRest, 1, true);
+            return await _baseClient.SendAuthAsync<HyperLiquidDefault>(request, parameters, ct).ConfigureAwait(false);
+        }
+
+        #endregion
         #region Transfer Internal
 
         /// <inheritdoc />

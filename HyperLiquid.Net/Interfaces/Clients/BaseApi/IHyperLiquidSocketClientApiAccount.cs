@@ -115,6 +115,25 @@ namespace HyperLiquid.Net.Interfaces.Clients.BaseApi
             CancellationToken ct = default);
 
         /// <summary>
+        /// Approve an API wallet (also called an agent wallet) to act on this account. The approving signature must
+        /// come from the account's master key. An unnamed agent replaces the previous unnamed one; a named agent is
+        /// kept separately, and the name may carry an expiry as "name valid_until &lt;timestamp&gt;".
+        /// <para>
+        /// Docs:<br />
+        /// <a href="https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/exchange-endpoint#approve-an-api-wallet" /><br />
+        /// Endpoint:<br />
+        /// POST /exchange (type: approveAgent)
+        /// </para>
+        /// </summary>
+        /// <param name="agentAddress">["<c>agentAddress</c>"] Address of the API wallet in 42-character hexadecimal format; e.g. 0x0000000000000000000000000000000000000000</param>
+        /// <param name="agentName">["<c>agentName</c>"] Optional name for the API wallet</param>
+        /// <param name="ct">Cancellation token</param>
+        Task<QueryResult> ApproveAgentAsync(
+            string agentAddress,
+            string? agentName = null,
+            CancellationToken ct = default);
+
+        /// <summary>
         /// Transfer USD between Spot and Futures account
         /// <para>
         /// Docs:<br />
