@@ -233,6 +233,23 @@ namespace HyperLiquid.Net.Clients.BaseApi
         }
 
         #endregion
+
+        #region Remove Agent
+
+        /// <inheritdoc />
+        public Task<HttpResult> RemoveAgentAsync(
+            string? agentName = null,
+            CancellationToken ct = default)
+        {
+            //an approval pointed at nothing. Hyperliquid publishes no removal action, and this is what its own
+            //interface sends when Remove is pressed - see the remarks on the interface method.
+            return ApproveAgentAsync(ZeroAddress, agentName, ct);
+        }
+
+        /// <summary>The address an approval names when it is removing an agent rather than authorising one.</summary>
+        private const string ZeroAddress = "0x0000000000000000000000000000000000000000";
+
+        #endregion
         #region Transfer Internal
 
         /// <inheritdoc />
